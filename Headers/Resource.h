@@ -1,171 +1,68 @@
 #pragma once
-#include "Resource.h"
-#include "TransportationNetwork.h"
-#include "Utilities.h"
-#include "Request.h"
-#include <vector>
-#include <tuple>
+#include <string>
+#include <algorithm> 
 
-class ResourceManager {
-    std::unordered_map<std::string, Resource> resources;
-    std::vector<std::tuple<int, int, std::string, int, std::string>> allocationRecords; // source, target, type, qty, timestamp
-    TransportationNetwork& network;
-    int nextRequestId = 1;
+// The Resource class represents a type of resource (e.g., Water, Food, Medicine)
+// with its properties like total quantity, cost, expiry, etc.
+// It supports operations like allocation, release, consumption, and stock management.
 
-
+class Resource {
 public:
-    ResourceManager(TransportationNetwork& net) : network(net) {}
+    std::string type;        // Type of resource (e.g., "Water", "Medicine")
+    int totalQuantity;       // Total units of this resource in stock
+    int allocatedQuantity;   // Units that are currently allocated/reserved
+    int expiryDate;          // Optional: expiry date (e.g., YYYYMMDD format)
+    double unitCost;         // Cost per unit (useful for optimization or budgeting)
+    double weight;           // Weight per unit (used in transport logistics)
+    int criticalLevel;       // Threshold below which stock is considered critical
 
-    bool allocateResources(const std::string& type, int qty, int sourceLocationId, int targetLocationId) {
-        auto it = resources.find(type);
-        if (it == resources.end()) return false;
+    // Constructor 
+    Resource(const std::string& type, int qty, int expiry = 0, double cost = 1.0,
+        double weight = 1.0, int criticalLevel = 100)
+        : type(type),
+        totalQuantity(qty),
+        allocatedQuantity(0),
+        expiryDate(expiry),
+        unitCost(cost),
+        weight(weight),
+        criticalLevel(criticalLevel) {
+    }
 
-        Resource& res = it->second;
-        if (res.allocate(qty)) {
-            allocationRecords.emplace_back(sourceLocationId, targetLocationId, type, qty, getCurrentTimestamp());
-
-            // Add resources to the target location if available
-            Location* targetLoc = network.getLocation(targetLocationId);
-            if (targetLoc) {
-                targetLoc->addResource(type, qty);
-            }
-
+    // Tries to allocate 'qty' units of the resource
+    // Returns true if successful (enough stock available), false otherwise
+    bool allocate(int qty) {
+        if (getAvailableQuantity() >= qty) {
+            allocatedQuantity += qty;
             return true;
         }
         return false;
     }
 
-    bool transferResources(int sourceLocationId, int targetLocationId, const std::string& type, int qty) {
-        Location* sourceLoc = network.getLocation(sourceLocationId);
-        Location* targetLoc = network.getLocation(targetLocationId);
-        Resource* res = getResource(type);
-
-        if (!sourceLoc || !targetLoc || !res) return false;
-        if (!sourceLoc->isOperational || !targetLoc->isOperational) return false;
-
-        // Calculate total weight of the transfer
-        int totalWeight = qty * res->weight;
-        if (totalWeight <= 0) return false;
-
-        // Find path with capacity for the total weight
-        auto path = network.findOptimalPath(sourceLocationId, targetLocationId, totalWeight);
-        if (path.empty()) return false;
-
-        // Verify all edges in the path can handle the load
-        bool canTransfer = true;
-        for (size_t i = 0; i < path.size() - 1; ++i) {
-            int from = path[i];
-            int to = path[i + 1];
-            const auto& edges = network.getEdges(from);
-            bool edgeFound = false;
-            for (const auto& edge : edges) {
-                if (edge.to == to && edge.canAddLoad(totalWeight)) {
-                    edgeFound = true;
-                    break;
-                }
-            }
-            if (!edgeFound) {
-                canTransfer = false;
-                break;
-            }
-        }
-        if (!canTransfer) return false;
-
-        // Update edge loads
-        for (size_t i = 0; i < path.size() - 1; ++i) {
-            int from = path[i];
-            int to = path[i + 1];
-            network.addLoadToEdge(from, to, totalWeight);
-        }
-
-        // Proceed with resource transfer
-        if (sourceLoc->useResource(type, qty)) {
-            targetLoc->addResource(type, qty);
-            allocationRecords.emplace_back(sourceLocationId, targetLocationId, type, qty, getCurrentTimestamp());
-            return true;
-        }
-        return false;
+    // Releases 'qty' units that were previously allocated
+    // Ensures that allocated quantity never goes below zero
+    void release(int qty) {
+        allocatedQuantity = std::max(0, allocatedQuantity - qty);
     }
 
-    // In the ResourceManager class:
-    void addResource(const Resource& res) {
-        resources.emplace(res.type, res);
-    }
-    void printInventory() const {
-        std::cout << "\n========== Central Resource Inventory ==========\n";
-        std::cout << std::left << std::setw(15) << "Type"
-            << std::setw(15) << "Total Qty"
-            << std::setw(15) << "Available"
-            << std::setw(10) << "Expiry"
-            << std::setw(10) << "Cost"
-            << std::setw(10) << "Weight"
-            << std::setw(10) << "Critical" << "\n";
-        std::cout << std::string(85, '-') << "\n";
-
-        for (const auto& entry : resources) {
-            const Resource& res = entry.second;
-            std::cout << std::setw(15) << entry.first
-                << std::setw(15) << res.totalQuantity
-                << std::setw(15) << (res.totalQuantity - res.allocatedQuantity)
-                << std::setw(10) << (res.expiryDate > 0 ? std::to_string(res.expiryDate) + "d" : "N/A")
-                << std::setw(10) << res.unitCost
-                << std::setw(10) << res.weight
-                << std::setw(10) << (res.isBelowCriticalLevel() ? "YES" : "No")
-                << "\n";
-        }
+    // Consumes 'qty' units of the resource (e.g., used or wasted)
+    // Affects both allocated and total stock
+    void consume(int qty) {
+        allocatedQuantity = std::max(0, allocatedQuantity - qty);
+        totalQuantity = std::max(0, totalQuantity - qty);
     }
 
-    void printAllocations() const {
-        std::cout << "\n========== Resource Allocations ==========\n";
-        std::cout << std::left << std::setw(15) << "Source"
-            << std::setw(15) << "Target"
-            << std::setw(15) << "Resource"
-            << std::setw(15) << "Quantity"
-            << std::setw(20) << "Timestamp" << "\n";
-        std::cout << std::string(80, '-') << "\n";
-
-        for (const auto& record : allocationRecords) {
-            std::cout << std::setw(15) << std::get<0>(record)  // Source
-                << std::setw(15) << std::get<1>(record)  // Target
-                << std::setw(15) << std::get<2>(record)  // Resource Type
-                << std::setw(15) << std::get<3>(record)  // Quantity
-                << std::setw(20) << std::get<4>(record)  // Timestamp
-                << "\n";
-        }
+    // Adds 'qty' new units to the stock (e.g., received from suppliers)
+    void addStock(int qty) {
+        totalQuantity += qty;
     }
 
-    void checkCriticalLevels() const {
-        bool anyBelowCritical = false;
-        std::cout << "\n========== Critical Resources Alert ==========\n";
-
-        for (const auto& entry : resources) {
-            const Resource& res = entry.second;
-            if (res.isBelowCriticalLevel()) {
-                std::cout << "WARNING: " << entry.first << " is below critical level! "
-                    << "Available: " << res.getAvailableQuantity()
-                    << " (Critical threshold: " << res.criticalLevel << ")\n";
-                anyBelowCritical = true;
-            }
-        }
-
-        if (!anyBelowCritical) {
-            std::cout << "All resources are above critical levels.\n";
-        }
+    // Checks if the available (unallocated) quantity has fallen below the critical level
+    bool isBelowCriticalLevel() const {
+        return getAvailableQuantity() < criticalLevel;
     }
 
-    Resource* getResource(const std::string& type) {
-        auto it = resources.find(type);
-        return it != resources.end() ? &it->second : nullptr;
-    }
-
-    bool hasAvailableResource(const std::string& type, int quantity) const {
-        auto it = resources.find(type);
-        return it != resources.end() && (it->second.totalQuantity - it->second.allocatedQuantity) >= quantity;
-    }
-
-    int createSupplyRequest(int targetLocationId, const std::string& resourceType, int quantity) {
-        Request req(nextRequestId++, 0, targetLocationId, resourceType, quantity, 5, Request::Type::SUPPLY);
-        // Process supply request logic would go here
-        return req.requestId;
+    // Returns the number of units that are available (not allocated)
+    int getAvailableQuantity() const {
+        return totalQuantity - allocatedQuantity;
     }
 };
