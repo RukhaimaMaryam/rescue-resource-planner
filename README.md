@@ -1,29 +1,24 @@
-Disaster Resource Allocation System
-This C++ project simulates disaster response resource management. It efficiently handles emergency requests using a priority queue (max-heap), tracks resource inventories at various locations with hash tables, and finds optimal paths between locations using Dijkstra's algorithm on a graph structure. The system ensures fast lookups, dynamic priority updates, and real-time status management to optimize resource distribution during disasters.
+# Disaster Resource Allocation System
 
-Features
-Priority Request Queue: Manages emergency requests by priority for processing.
+A C++ simulation system for disaster response resource management. It efficiently handles emergency requests using a priority queue (max-heap), tracks resource inventories at multiple locations with hash tables, and finds optimal paths between locations using Dijkstra's algorithm on a graph structure. The system ensures fast lookups, dynamic priority updates, and real-time status management to optimize resource distribution during disasters.
 
-Location Management: Tracks resources and occupancy using hash maps for constant-time operations.
+## Features
 
-Graph-based Pathfinding: Uses adjacency lists and Dijkstra's algorithm for shortest paths.
+- **Priority Request Queue:** Manage and process emergency requests based on priority.
+- **Location Resource Management:** Track resource inventories and capacities with constant-time lookups using hash tables.
+- **Graph-based Pathfinding:** Use adjacency lists and Dijkstra’s algorithm for shortest path calculation between locations.
+- **Dynamic Updates:** Support priority changes and status updates for requests and locations during runtime.
 
-Dynamic Updates: Supports updating request priorities and location status dynamically.
+## Data Structures Used
 
-Data Structures Used
-Heap: For priority queue implementation.
+- Heap (Max-Heap) for priority management
+- Hash Tables (`unordered_map`) for fast resource tracking and lookup
+- Graph (Adjacency List) for network connectivity and routing
+- Trees for managing priorities
 
-Hash Tables (unordered_map): For resource tracking and fast access.
+## How to Use
 
-Graph (Adjacency List): For network connectivity and routing.
-
-Trees: For managing priorities in the queue.
-
-Usage
-Add requests to the priority queue.
-
-Allocate and update resources at locations.
-
-Process requests in priority order.
-
-Find shortest paths for resource delivery.
+1. Add requests to the priority queue.
+2. Allocate and update resources at locations.
+3. Process requests in priority order.
+4. Use graph algorithms to determine optimal paths for resource delivery.
